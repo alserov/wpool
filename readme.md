@@ -16,20 +16,19 @@ func main() {
 	go func() {
 		time.Sleep(time.Second * 3)
 		pool.Stop() // stops all workers
-    }()
+        }()
 	
 	for i := 0; i < 10; i++ {
 		// adds new task to pool
 		pool.Execute(func() error {
-			// your function
-            return nil
+			// your function 
+		    return nil
 		})
-    }
+        }
 	
 	// awaits errors from pool
 	for err := range pool.AwaitError() {
 		fmt.Println(err)
-    }
+        }
 }
-
 ```
