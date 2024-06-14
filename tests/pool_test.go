@@ -64,6 +64,14 @@ func (p *PoolTestSuite) TestDefault() {
 			},
 			err: nil,
 		},
+		// close
+		{
+			fn: func() error {
+				p.pool.Stop()
+				return nil
+			},
+			err: nil,
+		},
 	}
 
 	errorsCount := 0
@@ -75,14 +83,23 @@ func (p *PoolTestSuite) TestDefault() {
 		}
 	}
 
-	go func() {
-		for errorsCount != 0 {
-		}
-		p.pool.Stop()
-	}()
-
 	for err = range p.pool.AwaitError() {
 		p.Require().Error(err)
 		errorsCount--
 	}
+
+	p.Require().Equal(errorsCount, 0)
+}
+
+func (p *PoolTestSuite) TestPanicOnSendOnClosed() {
+	defer func() {
+		p.Require().NotNil(recover())
+	}()
+
+	wp := wpool.NewPool(1)
+	wp.Stop()
+
+	wp.Execute(func() error {
+		return nil
+	})
 }

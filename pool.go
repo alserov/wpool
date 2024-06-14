@@ -1,7 +1,6 @@
 package wpool
 
 import (
-	"context"
 	"sync"
 )
 
@@ -13,13 +12,11 @@ type Pool interface {
 
 var _ Pool = &pool{}
 
-func NewPool(cap int64) *pool {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewPool(cap int) *pool {
 	p := &pool{
 		queueCh: make(chan Executive, cap),
 		errorCh: make(chan error, cap),
-		cancel:  cancel,
-		ctx:     ctx,
+		stopCh:  make(chan struct{}, 1),
 		cap:     cap,
 	}
 
@@ -33,29 +30,22 @@ type Executive func() error
 type pool struct {
 	queueCh chan Executive
 	errorCh chan error
+	stopCh  chan struct{}
 
-	cap int64
-
-	ctx    context.Context
-	cancel context.CancelFunc
+	cap int
 }
 
 func (p *pool) run() {
 	wg := sync.WaitGroup{}
-	wg.Add(int(p.cap))
+	wg.Add(p.cap)
 
 	for range p.cap {
 		go func(wg *sync.WaitGroup) {
 			defer wg.Done()
 
-			for {
-				select {
-				case <-p.ctx.Done():
-					return
-				case fn := <-p.queueCh:
-					if err := fn(); err != nil {
-						p.errorCh <- err
-					}
+			for fn := range p.queueCh {
+				if err := fn(); err != nil {
+					p.errorCh <- err
 				}
 			}
 		}(&wg)
@@ -69,14 +59,12 @@ func (p *pool) run() {
 
 func (p *pool) Execute(fn Executive) {
 	select {
-	case <-p.ctx.Done():
-		close(p.queueCh)
 	case p.queueCh <- fn:
 	}
 }
 
 func (p *pool) Stop() {
-	p.cancel()
+	close(p.queueCh)
 }
 
 func (p *pool) AwaitError() chan error {
